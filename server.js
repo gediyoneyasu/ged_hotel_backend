@@ -1062,7 +1062,8 @@ mongoose
 
 const clientDist = path.join(__dirname, '..', 'Ged_hotel', 'dist');
 const indexHtml = path.join(clientDist, 'index.html');
-const frontendDevOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
+const frontendOrigin = (process.env.FRONTEND_URL || '').trim().replace(/\/$/, '');
+const frontendDevOrigin = frontendOrigin || 'http://localhost:5173';
 
 if (fs.existsSync(indexHtml)) {
   app.use(express.static(clientDist));
@@ -1078,7 +1079,16 @@ if (fs.existsSync(indexHtml)) {
   });
   app.use('/admin', (req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-    res.redirect(302, `${frontendDevOrigin}${req.originalUrl}`);
+    if (frontendOrigin) {
+      return res.redirect(302, `${frontendOrigin}${req.originalUrl}`);
+    }
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(503).json({
+        success: false,
+        message: 'FRONTEND_URL is not configured on backend host'
+      });
+    }
+    return res.redirect(302, `${frontendDevOrigin}${req.originalUrl}`);
   });
 }
 
