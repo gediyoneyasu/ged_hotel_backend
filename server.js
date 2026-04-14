@@ -5,7 +5,11 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const axios = require('axios');
-require('dotenv').config();
+//require('dotenv').config();
+// For production on Render
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
 
 const app = express();
 
