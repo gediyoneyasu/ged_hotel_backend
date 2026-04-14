@@ -73,6 +73,12 @@ function isVercelAppOrigin(origin) {
   return /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(String(origin).trim());
 }
 
+/** Local network frontend origins for development (same Wi-Fi/LAN). */
+function isPrivateNetworkOrigin(origin) {
+  const value = String(origin || '').trim().toLowerCase();
+  return /^https?:\/\/(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$/.test(value);
+}
+
 // Middleware — set FRONTEND_URL or ALLOWED_ORIGINS on Render for custom domains.
 // Vercel *.vercel.app is allowed automatically so previews work without extra env.
 app.use(cors({
@@ -81,6 +87,9 @@ app.use(cors({
     const normalizedOrigin = normalizeOrigin(origin);
     if (corsAllowed.includes(normalizedOrigin)) return callback(null, true);
     if (isVercelAppOrigin(normalizedOrigin)) return callback(null, true);
+    if (process.env.NODE_ENV !== 'production' && isPrivateNetworkOrigin(normalizedOrigin)) {
+      return callback(null, true);
+    }
     console.warn('⛔ Blocked by CORS:', normalizedOrigin, 'Allowed:', corsAllowed);
     callback(null, false);
   },
