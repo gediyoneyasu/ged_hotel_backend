@@ -27,28 +27,61 @@ const defaultLocalOrigins = [
   'http://127.0.0.1:5000'
 ];
 
+function normalizeOrigin(origin) {
+  const value = String(origin || '').trim();
+  if (!value) return '';
+  try {
+    const u = new URL(value);
+    return `${u.protocol}//${u.host}`.replace(/\/$/, '').toLowerCase();
+  } catch {
+    return value.replace(/\/$/, '').toLowerCase();
+  }
+}
+
 function originsFromEnv() {
   const list = [];
-  if (process.env.FRONTEND_URL) {
-    list.push(String(process.env.FRONTEND_URL).trim().replace(/\/$/, ''));
-  }
-  if (process.env.ALLOWED_ORIGINS) {
-    for (const part of String(process.env.ALLOWED_ORIGINS).split(',')) {
-      const o = part.trim().replace(/\/$/, '');
-      if (o) list.push(o);
+  const add = (value) => {
+    const v = normalizeOrigin(value);
+    if (v) list.push(v);
+  };
+
+  if (process.env.FRONTEND_URL) add(process.env.FRONTEND_URL);
+
+  if (process.env.FRONTEND_URLS) {
+    for (const part of String(process.env.FRONTEND_URLS).split(',')) {
+      add(part);
     }
   }
+
+  if (process.env.ALLOWED_ORIGINS) {
+    for (const part of String(process.env.ALLOWED_ORIGINS).split(',')) {
+      add(part);
+    }
+  }
+
+  // Render/Vercel often exposes this without protocol (example: my-app.vercel.app)
+  if (process.env.VERCEL_URL) add(`https://${String(process.env.VERCEL_URL).replace(/^https?:\/\//, '')}`);
+
   return [...new Set(list)];
 }
 
 const corsAllowedList = originsFromEnv();
-const corsAllowed = corsAllowedList.length ? corsAllowedList : defaultLocalOrigins;
+const corsAllowed = (corsAllowedList.length ? corsAllowedList : defaultLocalOrigins.map(normalizeOrigin));
 
-// Middleware — set FRONTEND_URL or comma-separated ALLOWED_ORIGINS on the host (e.g. your Vercel URL)
+/** Any *.vercel.app preview/production URL (HTTPS). */
+function isVercelAppOrigin(origin) {
+  return /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(String(origin).trim());
+}
+
+// Middleware — set FRONTEND_URL or ALLOWED_ORIGINS on Render for custom domains.
+// Vercel *.vercel.app is allowed automatically so previews work without extra env.
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    if (corsAllowed.includes(origin)) return callback(null, true);
+    const normalizedOrigin = normalizeOrigin(origin);
+    if (corsAllowed.includes(normalizedOrigin)) return callback(null, true);
+    if (isVercelAppOrigin(normalizedOrigin)) return callback(null, true);
+    console.warn('⛔ Blocked by CORS:', normalizedOrigin, 'Allowed:', corsAllowed);
     callback(null, false);
   },
   credentials: true,
